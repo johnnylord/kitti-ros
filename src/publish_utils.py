@@ -9,8 +9,18 @@ from sensor_msgs.msg import Image, PointCloud2
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
 
+LINES = [[0, 1], [1, 2], [2, 3], [3, 0]]
+LINES += [[4, 5], [5, 6], [6, 7], [7, 4]]
+LINES += [[4, 0], [5, 1], [6, 2], [7, 3]]
+LINES += [[4, 1], [5, 0]]
+
+COLOR_MAP = {
+    'Car': (255, 0, 0),
+    'Pedestrian': (0, 255, 0),
+    'Cyclist': (0, 0, 255) }
 
 FRAME_ID = "map"
+LIFETIME = 0.2
 
 def publish_camera(pub, img, bridge):
     pub.publish(bridge.cv2_to_imgmsg(img, 'bgr8'))
@@ -20,6 +30,34 @@ def publish_point_cloud(pub, pcl):
     header.stamp = rospy.Time.now()
     header.frame_id = FRAME_ID
     pub.publish(pcl2.create_cloud_xyz32(header, pcl[:, :3]))
+
+def publish_3dbox(pub, corners_3d_velos, types):
+    marker_arr = MarkerArray()
+    for i, (corners_3d_velo, type_) in enumerate(zip(corners_3d_velos, types)):
+        marker = Marker()
+        marker.header.stamp = rospy.Time.now()
+        marker.header.frame_id = FRAME_ID
+
+        marker.id = i
+        marker.action = Marker.ADD
+        marker.lifetime = rospy.Duration(LIFETIME)
+        marker.type = Marker.LINE_LIST
+
+        b, g, r = COLOR_MAP[type_]
+        marker.color.r = r/255.0
+        marker.color.g = g/255.0
+        marker.color.b = b/255.0
+        marker.color.a = 1.0
+        marker.scale.x = 0.1
+
+        marker.points = []
+        for l in LINES:
+            p1 = corners_3d_velo[l[0]]
+            p2 = corners_3d_velo[l[1]]
+            marker.points.append(Point(p1[0], p1[1], p1[2]))
+            marker.points.append(Point(p2[0], p2[1], p2[2]))
+        marker_arr.markers.append(marker)
+    pub.publish(marker_arr)
 
 def publish_car(pub, path):
     marker_arr = MarkerArray()
@@ -52,7 +90,7 @@ def publish_car(pub, path):
     mesh_marker.header.stamp = rospy.Time.now()
     mesh_marker.header.frame_id = FRAME_ID
 
-    mesh_marker.id = 1
+    mesh_marker.id = -1
     mesh_marker.lifetime = rospy.Duration()
     mesh_marker.type = Marker.MESH_RESOURCE
     mesh_marker.mesh_resource = path
